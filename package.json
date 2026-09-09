@@ -1,0 +1,20 @@
+{
+  "name": "trebisov-pixel-explorer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "TREBIŠOV: Pixel Explorer — a 2.5D pixel-art exploration game recreating the real city of Trebišov, Slovakia.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "phaser": "^3.80.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4",
+    "vite": "^5.4.2"
+  }
+}
