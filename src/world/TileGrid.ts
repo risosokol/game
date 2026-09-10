@@ -77,6 +77,40 @@ export class TileGrid {
     }
   }
 
+  /** Fills an arbitrary (possibly non-convex) polygon using an even-odd
+   * scanline rule. Used for real, irregular OSM area geometry (parks,
+   * cemeteries, water) that a handful of rectangles can't approximate. */
+  fillPolygon(points: { x: number; y: number }[], type: TileType): void {
+    if (points.length < 3) return;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    for (const p of points) {
+      if (p.y < minY) minY = p.y;
+      if (p.y > maxY) maxY = p.y;
+    }
+    const startY = Math.max(0, Math.floor(minY));
+    const endY = Math.min(this.height - 1, Math.ceil(maxY));
+
+    for (let y = startY; y <= endY; y++) {
+      const scanY = y + 0.5;
+      const xs: number[] = [];
+      for (let i = 0; i < points.length; i++) {
+        const a = points[i];
+        const b = points[(i + 1) % points.length];
+        if ((a.y <= scanY && b.y > scanY) || (b.y <= scanY && a.y > scanY)) {
+          const t = (scanY - a.y) / (b.y - a.y);
+          xs.push(a.x + t * (b.x - a.x));
+        }
+      }
+      xs.sort((a, b) => a - b);
+      for (let i = 0; i + 1 < xs.length; i += 2) {
+        const x0 = Math.max(0, Math.round(xs[i]));
+        const x1 = Math.min(this.width - 1, Math.round(xs[i + 1]));
+        for (let x = x0; x <= x1; x++) this.set(x, y, type);
+      }
+    }
+  }
+
   isWalkable(x: number, y: number): boolean {
     const t = this.get(x, y);
     return t !== TileType.WATER;

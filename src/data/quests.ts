@@ -9,23 +9,24 @@ export interface QuestDefinition {
 export const questDefinitions: QuestDefinition[] = [
   {
     id: 'quest_faith',
-    title: 'Places of Faith',
-    description: 'Visit the parish church, the reformed church and the synagogue.',
-    requiredLandmarks: ['parish_church', 'reformed_church', 'synagogue'],
+    title: 'Mariánske námestie',
+    description: 'Visit both churches on the Marian Square.',
+    requiredLandmarks: ['parish_church', 'greekcatholic_church'],
   },
   {
-    id: 'quest_green',
-    title: 'Green Trebišov',
-    description: 'Discover the manor and its English park.',
-    requiredLandmarks: ['andrassy_manor', 'kastiel_park'],
+    id: 'quest_andrassy',
+    title: 'The Andrássy Legacy',
+    description: 'Discover the manor, its park, the gallery and the mausoleum.',
+    requiredLandmarks: ['andrassy_manor', 'mestsky_park', 'koniaren_gallery', 'andrassy_mausoleum'],
   },
   {
     id: 'quest_grand_tour',
     title: 'The Grand Tour',
     description: 'Discover every landmark in town.',
     requiredLandmarks: [
-      'andrassy_manor', 'kastiel_park', 'parish_church', 'reformed_church',
-      'town_hall', 'synagogue', 'culture_house', 'train_station', 'kalvaria',
+      'andrassy_manor', 'mestsky_park', 'koniaren_gallery', 'parish_church',
+      'greekcatholic_church', 'town_hall', 'culture_centre', 'andrassy_mausoleum',
+      'paric_castle', 'train_station',
     ],
   },
 ];

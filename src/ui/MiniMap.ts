@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { DEPTH, GAME_WIDTH, TILE_SIZE } from '@/config/GameConfig';
-import { GRID_WIDTH, GRID_HEIGHT, roads, parks, plazas } from '@/world/cityLayout';
+import { GRID_WIDTH, GRID_HEIGHT, roads, areaPolygons, plazas } from '@/world/cityLayout';
+import { TileType } from '@/world/TileGrid';
 import { landmarks } from '@/data/landmarks';
 import { landmarkManager } from '@/systems/LandmarkManager';
 import { EventBus, GameEvents } from '@/systems/EventBus';
@@ -84,10 +85,16 @@ export class MiniMap {
     g.fillStyle(0x1c2317, 1);
     g.fillRect(0, 0, MAP_W, MAP_H);
 
-    for (const area of parks) {
-      g.fillStyle(0x2d4425, 1);
-      g.fillRect(area.x0 * TILE_SIZE * this.scaleX, area.y0 * TILE_SIZE * this.scaleY,
-        (area.x1 - area.x0) * TILE_SIZE * this.scaleX, (area.y1 - area.y0) * TILE_SIZE * this.scaleY);
+    for (const area of areaPolygons) {
+      g.fillStyle(area.type === TileType.WATER ? 0x274a5c : 0x2d4425, 1);
+      g.beginPath();
+      area.points.forEach(([x, y], i) => {
+        const px = x * TILE_SIZE * this.scaleX;
+        const py = y * TILE_SIZE * this.scaleY;
+        if (i === 0) g.moveTo(px, py); else g.lineTo(px, py);
+      });
+      g.closePath();
+      g.fillPath();
     }
     for (const area of plazas) {
       g.fillStyle(0x4a4433, 1);

@@ -3,16 +3,6 @@
  * procedural generator (PixelArtFactory) and consumers (World/UI scenes)
  * never drift apart on naming.
  */
-export const TileTextureKeys = {
-  grass: 'tile_grass',
-  road: 'tile_road',
-  plaza: 'tile_plaza',
-  park: 'tile_park',
-  path: 'tile_path',
-  rail: 'tile_rail',
-  water: 'tile_water',
-} as const;
-
 export const PlayerTextureKeys = {
   idle: (dir: string) => `player_idle_${dir}`,
   walk: (dir: string, frame: number) => `player_walk_${dir}_${frame}`,
@@ -34,6 +24,7 @@ export const PropTextureKeys = {
   bike: 'prop_bike',
   car: 'prop_car',
   noticeboard: 'prop_noticeboard',
+  monument: 'prop_monument',
   shadowSmall: 'prop_shadow_sm',
   shadowMed: 'prop_shadow_md',
 };

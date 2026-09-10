@@ -1,0 +1,11 @@
+{
+  "originLat": 48.635,
+  "originLon": 21.708,
+  "metersPerTile": 4,
+  "worldOriginTileX": 0,
+  "worldOriginTileY": 0,
+  "bboxLatMin": 48.615,
+  "bboxLatMax": 48.635,
+  "bboxLonMin": 21.708,
+  "bboxLonMax": 21.7325
+}
