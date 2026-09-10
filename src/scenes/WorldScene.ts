@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { SCENE_KEYS, TILE_SIZE } from '@/config/GameConfig';
 import { buildTileGrid } from '@/world/MapBuilder';
 import { renderTileLayer, renderBuildings, renderProps } from '@/world/WorldRenderer';
+import { renderRoadDecoration } from '@/world/RoadDecoration';
 import { buildCollisionGroup } from '@/world/CollisionBuilder';
 import { GRID_WIDTH, GRID_HEIGHT } from '@/world/cityLayout';
 import { Player } from '@/entities/Player';
@@ -31,6 +32,7 @@ export class WorldScene extends Phaser.Scene {
 
     const grid = buildTileGrid();
     const { map } = renderTileLayer(this, grid);
+    renderRoadDecoration(this);
     renderBuildings(this);
     renderProps(this);
     const collisionGroup = buildCollisionGroup(this);

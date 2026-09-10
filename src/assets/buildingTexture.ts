@@ -6,10 +6,14 @@ import { buildingTextureKey } from './TextureKeys';
  * too many to give each its own hand-detailed procedural texture. Curated,
  * individually-discoverable landmarks still get a unique texture (worth
  * the detail); every other building reuses one texture per
- * (kind, rounded size) bucket — same generic architecture, correct real
- * footprint size/position/collision. Shared between PixelArtFactory
- * (which generates the textures) and WorldRenderer (which assigns them),
- * so the two can never drift apart on naming.
+ * (kind, rounded size, colour variant) bucket — same generic architecture,
+ * correct real footprint size/position/collision, but not the same
+ * building rendered 700 times: ~2,421 of the 2,462 buildings here are
+ * generic `house`, so the variant hash below is what keeps that from
+ * reading as "one building copy-pasted everywhere" (see
+ * PixelArtFactory.schemeFor). Shared between PixelArtFactory (which
+ * generates the textures) and WorldRenderer (which assigns them), so the
+ * two can never drift apart on naming.
  */
 export const CURATED_BUILDING_IDS = new Set([
   'andrassy_manor',
@@ -23,6 +27,13 @@ export const CURATED_BUILDING_IDS = new Set([
   'paric_castle',
 ]);
 
+/** How many colour/detail variants schemeFor() offers per building kind —
+ * must stay in sync with the arrays in PixelArtFactory.schemeFor. */
+export const VARIANT_COUNT: Record<string, number> = {
+  house: 8,
+  shop: 4,
+};
+
 const BUCKET_STEP = 2;
 const MAX_BUCKET_DIM = 30;
 
@@ -31,12 +42,38 @@ function bucketDim(n: number): number {
   return Math.max(BUCKET_STEP, Math.min(MAX_BUCKET_DIM, rounded));
 }
 
+/** Small, deterministic string hash (FNV-1a) so the same building id
+ * always resolves to the same colour variant across reloads/rebuilds. */
+function hashString(s: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+}
+
+export function variantIndexFor(b: BuildingFootprint): number {
+  const count = VARIANT_COUNT[b.kind] ?? 1;
+  if (count <= 1) return 0;
+  return hashString(b.id) % count;
+}
+
+/** True for small (<=3x3 tile) generic buildings — sheds, garages, and
+ * other minor outbuildings in the source OSM data get a simpler
+ * treatment than full houses (see PixelArtFactory.generateBuilding). */
+export function isShed(b: BuildingFootprint): boolean {
+  return b.kind === 'house' && b.w <= 3 && b.h <= 3;
+}
+
 export function isCurated(b: BuildingFootprint): boolean {
   return CURATED_BUILDING_IDS.has(b.id);
 }
 
-export function bucketKeyFor(kind: string, w: number, h: number): string {
-  return `building_bucket_${kind}_${bucketDim(w)}x${bucketDim(h)}`;
+export function bucketKeyFor(b: BuildingFootprint): string {
+  const { w, h } = bucketDim2(b.w, b.h);
+  const shed = isShed(b) ? 'shed' : 'full';
+  return `building_bucket_${b.kind}_${w}x${h}_${shed}_v${variantIndexFor(b)}`;
 }
 
 /**
@@ -68,5 +105,5 @@ export function getFootprintRect(b: BuildingFootprint): { x0: number; y0: number
 }
 
 export function textureKeyFor(b: BuildingFootprint): string {
-  return isCurated(b) ? buildingTextureKey(b.id) : bucketKeyFor(b.kind, b.w, b.h);
+  return isCurated(b) ? buildingTextureKey(b.id) : bucketKeyFor(b);
 }

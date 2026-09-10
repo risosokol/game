@@ -6,7 +6,7 @@ import type { BuildingFootprint } from '@/world/cityLayout';
 import { TILE_ORDER, TILESET_KEY } from '@/world/tileIndex';
 import { TileType } from '@/world/TileGrid';
 import { COLLIDER_TEXTURE_KEY } from '@/world/CollisionBuilder';
-import { textureKeyFor, effectiveFootprint } from './buildingTexture';
+import { textureKeyFor, effectiveFootprint, variantIndexFor, isShed, isCurated } from './buildingTexture';
 
 /**
  * PLACEHOLDER-PROGRAMMATIC ART for everything NOT covered by a real asset.
@@ -106,8 +106,16 @@ export class PixelArtFactory {
         break;
       case TileType.ROAD:
         g.fillStyle(Palette.road).fillRect(ox, 0, T, T);
-        g.fillStyle(Palette.roadEdge);
-        for (let i = 0; i < 8; i++) g.fillRect(ox + ((i * 13 + 1) % T), (i * 7 + 2) % T, 2, 1);
+        // patchwork resurfacing blotches for texture/contrast
+        g.fillStyle(Palette.roadPatch, 0.5);
+        g.fillRect(ox + 3, 4, 11, 8);
+        g.fillRect(ox + 17, 19, 10, 9);
+        g.fillStyle(Palette.roadEdge, 0.8);
+        for (let i = 0; i < 14; i++) g.fillRect(ox + ((i * 13 + 1) % T), (i * 7 + 2) % T, 2, 1);
+        // a couple of small cracks
+        g.lineStyle(1, Palette.roadEdge, 0.6);
+        g.lineBetween(ox + 6, 22, ox + 12, 27);
+        g.lineBetween(ox + 12, 27, ox + 10, 31);
         break;
       case TileType.PLAZA:
         g.fillStyle(Palette.plaza).fillRect(ox, 0, T, T);
@@ -263,20 +271,38 @@ export class PixelArtFactory {
       if (generatedKeys.has(key)) continue;
       generatedKeys.add(key);
       const { w, h } = effectiveFootprint(b);
-      this.generateBuilding(key, b.kind, w, h, !!b.roofHorizontal);
+      const variant = isCurated(b) ? 0 : variantIndexFor(b);
+      const shed = !isCurated(b) && isShed(b);
+      this.generateBuilding(key, b.kind, w, h, !!b.roofHorizontal, variant, shed);
     }
   }
 
-  private generateBuilding(key: string, kind: BuildingFootprint['kind'], wTiles: number, hTiles: number, roofHorizontal: boolean): void {
+  private generateBuilding(key: string, kind: BuildingFootprint['kind'], wTiles: number, hTiles: number, roofHorizontal: boolean, variant: number, shed: boolean): void {
     const spec = { kind, roofHorizontal };
     const T = TILE_SIZE;
     const w = wTiles * T;
-    const wallH = hTiles * T;
-    const roofH = Math.round(Math.max(20, Math.min(64, hTiles * T * 0.55)));
+
+    // A building's real footprint DEPTH (hTiles, north-south extent of
+    // its OSM polygon) is not the same thing as how many storeys tall it
+    // is — a building with a long, deep lot is not a tower block. This
+    // sprite is a flat front-elevation "card", so wall height is derived
+    // from a damped storey estimate instead of scaling linearly with
+    // hTiles (which, taken literally, drew some ordinary houses as
+    // 10+ storey towers). hTiles still fully controls the actual
+    // footprint used for collision/positioning — see getFootprintRect —
+    // this only changes how tall the sprite is drawn.
+    const FLOOR_PX = 28;
+    const stories = shed ? 1 : Math.max(1, Math.min(7, Math.round(1 + Math.sqrt(Math.max(0, hTiles - 2)))));
+    const wallH = shed
+      ? Math.round(Math.max(14, Math.min(24, hTiles * T * 0.3)))
+      : stories * FLOOR_PX + 12;
+    const roofH = shed
+      ? Math.round(Math.max(10, Math.min(20, hTiles * T * 0.3)))
+      : Math.round(Math.max(20, Math.min(56, wallH * 0.5)));
     const H = wallH + roofH;
     const g = this.g;
 
-    const scheme = this.schemeFor(kind);
+    const scheme = this.schemeFor(kind, variant);
 
     // ground contact shadow
     g.fillStyle(Palette.shadow, 0.22);
@@ -289,37 +315,59 @@ export class PixelArtFactory {
     g.fillStyle(this.darken(scheme.wall, 0.25));
     g.fillRect(0, H - 8, w, 8);
 
-    // windows grid
-    g.fillStyle(scheme.window);
-    const winCols = Math.max(1, Math.floor(w / 24));
-    const winRows = Math.max(1, Math.floor((wallH - 16) / 26));
-    const winW = 10, winH = 14;
-    const marginX = (w - winCols * 24) / 2 + 7;
-    for (let r = 0; r < winRows; r++) {
-      for (let c = 0; c < winCols; c++) {
-        const wx = marginX + c * 24;
-        const wy = roofH + 12 + r * 26;
+    if (shed) {
+      // Small (<=3x3 tile) generic outbuildings — sheds/garages in the
+      // source data — read oddly if rendered as a full house, so they get
+      // a simpler treatment: at most one small window, a plain door slab,
+      // no full window grid or plinth trim.
+      if (w >= 28) {
         g.fillStyle(this.darken(scheme.wall, 0.35));
-        g.fillRect(wx - 2, wy - 2, winW + 4, winH + 4);
+        g.fillRect(w - 16, roofH + 8, 10, 10);
         g.fillStyle(scheme.window);
-        g.fillRect(wx, wy, winW, winH);
-        g.fillStyle(0xffffff, 0.25);
-        g.fillRect(wx, wy, winW, 3);
+        g.fillRect(w - 14, roofH + 10, 6, 6);
       }
+      g.fillStyle(scheme.door);
+      const doorW = Math.min(12, w * 0.4);
+      g.fillRect(w / 2 - doorW / 2, H - 18, doorW, 18);
+    } else {
+      // windows grid
+      const winCols = Math.max(1, Math.floor(w / 24));
+      const winRows = Math.max(1, Math.floor((wallH - 16) / 26));
+      const winW = 10, winH = 14;
+      const marginX = (w - winCols * 24) / 2 + 7;
+      for (let r = 0; r < winRows; r++) {
+        for (let c = 0; c < winCols; c++) {
+          const wx = marginX + c * 24;
+          const wy = roofH + 12 + r * 26;
+          g.fillStyle(this.darken(scheme.wall, 0.35));
+          g.fillRect(wx - 2, wy - 2, winW + 4, winH + 4);
+          g.fillStyle(scheme.window);
+          g.fillRect(wx, wy, winW, winH);
+          g.fillStyle(0xffffff, 0.25);
+          g.fillRect(wx, wy, winW, 3);
+        }
+      }
+
+      // door
+      g.fillStyle(scheme.door);
+      const doorW = 14;
+      g.fillRect(w / 2 - doorW / 2, H - 26, doorW, 26);
+      g.fillStyle(this.darken(scheme.door, 0.3));
+      g.fillRect(w / 2 - doorW / 2, H - 26, doorW, 4);
     }
 
-    // door
-    g.fillStyle(Palette.doorBrown);
-    const doorW = 14;
-    g.fillRect(w / 2 - doorW / 2, H - 26, doorW, 26);
-    g.fillStyle(0x3a2818);
-    g.fillRect(w / 2 - doorW / 2, H - 26, doorW, 4);
-
     // roof
-    this.drawRoof(g, spec, w, roofH, scheme);
-
-    // kind-specific accents
-    this.drawAccent(g, spec, w, roofH, wallH, scheme);
+    if (shed) {
+      // mono-pitch lean-to roof instead of the full gable
+      g.fillStyle(scheme.roof);
+      g.fillRect(0, 0, w, roofH);
+      g.fillStyle(this.darken(scheme.roof, 0.2));
+      g.fillRect(0, roofH - 3, w, 3);
+    } else {
+      this.drawRoof(g, spec, w, roofH, scheme);
+      // kind-specific accents
+      this.drawAccent(g, spec, w, roofH, wallH, scheme);
+    }
 
     this.tex(key, w, H);
   }
@@ -417,20 +465,45 @@ export class PixelArtFactory {
     }
   }
 
-  private schemeFor(kind: BuildingFootprint['kind']): BuildingScheme {
+  /** House and shop are the two kinds with real per-variant colour
+   * palettes (see VARIANT_COUNT in buildingTexture.ts) — everything else
+   * is rare enough (curated landmarks, or only a handful of instances)
+   * that one fixed scheme per kind is fine. */
+  private schemeFor(kind: BuildingFootprint['kind'], variant = 0): BuildingScheme {
+    const doorColors = [Palette.doorBrown, Palette.doorGreen, Palette.doorBlue, Palette.doorRed];
     switch (kind) {
-      case 'manor': return { wall: Palette.wallOchre, roof: Palette.roofRed, window: Palette.windowGlass };
-      case 'church': return { wall: Palette.wallWhite, roof: Palette.roofSlate, window: Palette.windowGlass };
-      case 'chapel': return { wall: Palette.wallWhite, roof: Palette.roofSlate, window: Palette.windowGlass };
-      case 'townhall': return { wall: Palette.wallStone, roof: Palette.roofSlate, window: Palette.windowGlass };
-      case 'synagogue': return { wall: Palette.wallCream, roof: Palette.roofCopper, window: Palette.windowGlass };
-      case 'culturehouse': return { wall: Palette.wallStone, roof: Palette.roofSlateDark, window: Palette.windowGlass };
-      case 'station': return { wall: Palette.wallCream, roof: Palette.roofRedDark, window: Palette.windowGlass };
-      case 'shop': return { wall: Palette.wallCream, roof: Palette.roofRed, window: Palette.windowGlass };
-      case 'mausoleum': return { wall: Palette.wallStone, roof: Palette.roofSlateDark, window: Palette.windowGlass };
-      case 'ruins': return { wall: Palette.stoneGray, roof: Palette.stoneGray, window: Palette.windowGlass };
+      case 'manor': return { wall: Palette.wallOchre, roof: Palette.roofRed, window: Palette.windowGlass, door: Palette.doorBrown };
+      case 'church': return { wall: Palette.wallWhite, roof: Palette.roofSlate, window: Palette.windowGlass, door: Palette.doorBrown };
+      case 'chapel': return { wall: Palette.wallWhite, roof: Palette.roofSlate, window: Palette.windowGlass, door: Palette.doorBrown };
+      case 'townhall': return { wall: Palette.wallStone, roof: Palette.roofSlate, window: Palette.windowGlass, door: Palette.doorBrown };
+      case 'synagogue': return { wall: Palette.wallCream, roof: Palette.roofCopper, window: Palette.windowGlass, door: Palette.doorBrown };
+      case 'culturehouse': return { wall: Palette.wallStone, roof: Palette.roofSlateDark, window: Palette.windowGlass, door: Palette.doorBrown };
+      case 'station': return { wall: Palette.wallCream, roof: Palette.roofRedDark, window: Palette.windowGlass, door: Palette.doorBrown };
+      case 'mausoleum': return { wall: Palette.wallStone, roof: Palette.roofSlateDark, window: Palette.windowGlass, door: Palette.doorBrown };
+      case 'ruins': return { wall: Palette.stoneGray, roof: Palette.stoneGray, window: Palette.windowGlass, door: Palette.doorBrown };
+      case 'shop': {
+        const shopSchemes: BuildingScheme[] = [
+          { wall: Palette.wallCream, roof: Palette.roofRed, window: Palette.windowGlass, door: Palette.doorBlue },
+          { wall: Palette.wallWhite, roof: Palette.roofSlateDark, window: Palette.windowGlass, door: Palette.doorRed },
+          { wall: Palette.wallSand, roof: Palette.roofBrown, window: Palette.windowGlass, door: Palette.doorGreen },
+          { wall: Palette.wallSky, roof: Palette.roofSlate, window: Palette.windowGlass, door: Palette.doorBrown },
+        ];
+        return shopSchemes[variant % shopSchemes.length];
+      }
       case 'house':
-      default: return { wall: Palette.wallCream, roof: Palette.roofRed, window: Palette.windowGlass };
+      default: {
+        const houseSchemes: BuildingScheme[] = [
+          { wall: Palette.wallCream, roof: Palette.roofRed },
+          { wall: Palette.wallOchre, roof: Palette.roofRedDark },
+          { wall: Palette.wallSage, roof: Palette.roofSlate },
+          { wall: Palette.wallBlush, roof: Palette.roofBrown },
+          { wall: Palette.wallSky, roof: Palette.roofSlateDark },
+          { wall: Palette.wallButter, roof: Palette.roofRed },
+          { wall: Palette.wallClay, roof: Palette.roofMoss },
+          { wall: Palette.wallSand, roof: Palette.roofBrown },
+        ].map((s) => ({ ...s, window: Palette.windowGlass, door: doorColors[variant % doorColors.length] }));
+        return houseSchemes[variant % houseSchemes.length];
+      }
     }
   }
 
@@ -486,6 +559,7 @@ interface BuildingScheme {
   wall: number;
   roof: number;
   window: number;
+  door: number;
 }
 
 interface BuildingSpec {
