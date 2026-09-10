@@ -58,23 +58,45 @@ run the game.
 - Save/load via `localStorage` (discovered landmarks, quest progress,
   player position, audio settings) — progress survives a refresh.
 
-## Why the art is "procedural placeholder" (the map geometry isn't)
+## Art: real assets + procedural placeholder
 
-This prototype was built in a sandboxed environment with no outbound
-network access to image hosts, so all pixel art is placeholder:
+The game mixes real pixel-art assets (supplied by the project owner) with
+procedurally-generated placeholder art, per texture:
 
-- **Art**: every texture (tiles, buildings, player, NPCs, props, UI chrome)
-  is generated at boot time from vector primitives via Phaser's
-  `Graphics → generateTexture`, see `src/assets/PixelArtFactory.ts`. This
-  is clearly isolated placeholder art — swapping in hand-drawn sprites
-  later just means loading real images under the same keys
-  (`src/assets/TextureKeys.ts`) in `PreloadScene` instead of calling the
-  factory; nothing downstream changes. With ~2,460 real buildings in the
-  playable area, only the 10 curated landmarks get a unique detailed
-  texture — every other building reuses one texture per (kind, rounded
-  size) bucket (see `src/assets/buildingTexture.ts`), at its exact real
-  footprint position and (for non-curated buildings) a footprint rounded
-  to the nearest couple of meters. Real geometry, generic decoration.
+- **Real assets** — loaded as image files in `PreloadScene`, all from
+  unTied Games (untiedgames.com), used with the project owner's own
+  copies of these packs:
+  - **Player & NPC characters** — the 4-direction (32×48, 6-frame) walk
+    cycle from the *Pixel House Set* pack. NPCs reuse the same sprite with
+    a `setTint()` color per palette, since the source pack ships one
+    character skin.
+  - **Trees** (`tree_a`.."tree_d") and the **grass ground tile** — from
+    the *World Map Pixel Art Tileset* pack.
+  - **Title screen background** — a 6-layer parallax village scene (the
+    "Village 1" set) from the *Pixel Art Game Backgrounds* pack.
+  - **Discovery sparkle burst** (34-frame animation, played once when a
+    landmark is discovered) — from the *Super Pixel Objects and Items*
+    pack.
+  - See the credit comment at the top of `src/scenes/PreloadScene.ts` and
+    `public/assets/` for exactly what was copied in.
+- **Procedural placeholder** — everything else (tiles other than grass,
+  every one of the ~2,460 real building footprints, street furniture
+  props, UI chrome) is still generated at boot time from vector primitives
+  via Phaser's `Graphics → generateTexture`, see
+  `src/assets/PixelArtFactory.ts`. **Buildings deliberately were not**
+  swapped for the supplied packs: none of them include street-level
+  building façades at a scale/style matching ~2,460 individually-sized
+  real footprints (the closest pack, *Pixel House Set*, is interior
+  furniture, not exterior walls; the *World Map* pack's "town" pieces are
+  single whole-city icons for an overworld map, not walkable buildings).
+  Forcing a mismatched asset in just to say "it's real art" would have
+  made the town look worse, not better, so building rendering stays
+  procedural (still positioned at each building's exact real footprint —
+  see the next section).
+- **Also supplied but intentionally unused**: a generic seamless-texture
+  sheet (no clean, confidently-croppable tileable swatch for this style)
+  and interior house-furniture sprites (kitchen/bathroom/bedroom — this
+  game has no interior scenes to put them in).
 
 **The map geometry itself is real**, not invented — see the next section.
 
@@ -139,6 +161,9 @@ scripts/
   generate-city-data.mjs   Overpass JSON -> cityLayout.ts + landmarkAnchors.
 data/osm/
   README.md        OSM data provenance, licensing, Overpass queries.
+public/assets/
+  character/, props/, tiles/, title/, vfx/   Real art files (see above),
+                                              loaded by PreloadScene.
 ```
 
 ### Adding a new landmark
@@ -159,9 +184,18 @@ widen the bounding box first — see `data/osm/README.md`.
   texture "bucket" size (±1 tile, ~±4m) so a handful of generic textures
   can cover ~2,450 buildings instead of generating one each.
 - Only the 10 curated landmarks get individually detailed pixel art;
-  every other real building uses generic per-kind decoration.
+  every other real building uses generic per-kind procedural decoration
+  (see "Art: real assets + procedural placeholder" above for why building
+  façades specifically were not swapped for supplied art packs).
+- NPCs reuse the player's character art with a color tint rather than a
+  distinct sprite, since the source pack ships one character skin.
 - Audio is placeholder synth tones, not recorded foley/music (see the doc
   comment in `src/systems/AudioManager.ts` for the intended real-asset
   swap points).
 - The lighting pass is a static, subtle daytime tint rather than a full
   day/night cycle, per the brief's own priority ordering.
+- No license files shipped with the supplied art packs (only friendly
+  "thanks for using this" readmes from the creator) — keep your itch.io
+  purchase/download confirmation for these packs (unTied Games /
+  untiedgames.com) for your own records if you plan to redistribute the
+  game.

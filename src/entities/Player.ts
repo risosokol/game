@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { PLAYER_SPEED, PLAYER_RUN_SPEED, DEPTH } from '@/config/GameConfig';
 import { playerAnimKey } from './AnimationFactory';
 import { audioManager } from '@/systems/AudioManager';
+import { CharacterSheetKeys } from '@/assets/TextureKeys';
 
 type Facing = 'down' | 'up' | 'left' | 'right';
 
@@ -18,7 +19,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private shadow: Phaser.GameObjects.Ellipse;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
-    super(scene, x, y, 'player_idle_down');
+    super(scene, x, y, CharacterSheetKeys.sheet('down'), 0);
     scene.add.existing(this);
     scene.physics.add.existing(this);
 
@@ -26,8 +27,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.setDepth(DEPTH.PLAYER);
 
     const body = this.body as Phaser.Physics.Arcade.Body;
-    body.setSize(14, 10);
-    body.setOffset(5, 34);
+    body.setSize(16, 12);
+    body.setOffset(8, 34);
     body.setCollideWorldBounds(true);
 
     this.shadow = scene.add.ellipse(x, y, 16, 6, 0x000000, 0.25);
@@ -92,9 +93,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   private applyAnimation(): void {
-    const dirKey = this.facing === 'left' || this.facing === 'right' ? 'side' : this.facing;
-    this.setFlipX(this.facing === 'left');
-    const key = playerAnimKey(this.moving ? 'walk' : 'idle', dirKey);
+    const key = playerAnimKey(this.moving ? 'walk' : 'idle', this.facing);
     if (this.anims.currentAnim?.key !== key) {
       this.play(key, true);
     }

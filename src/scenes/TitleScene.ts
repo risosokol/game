@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { SCENE_KEYS, GAME_WIDTH, GAME_HEIGHT } from '@/config/GameConfig';
-import { UITextureKeys } from '@/assets/TextureKeys';
+import { TitleBgLayerKeys, TITLE_BG_LAYER_COUNT } from '@/assets/TextureKeys';
 import { audioManager } from '@/systems/AudioManager';
 import { saveManager } from '@/systems/SaveManager';
 import { landmarkManager } from '@/systems/LandmarkManager';
@@ -11,11 +11,9 @@ export class TitleScene extends Phaser.Scene {
   }
 
   create(): void {
-    const bg = this.add.image(0, 0, UITextureKeys.titleBg).setOrigin(0);
-    bg.setDisplaySize(GAME_WIDTH, GAME_HEIGHT);
-    bg.setAlpha(0.9);
+    this.buildParallaxBackground();
 
-    const vign = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x0a0c10, 0.35).setOrigin(0);
+    const vign = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x0a0c10, 0.3).setOrigin(0);
     void vign;
 
     const cx = GAME_WIDTH / 2;
@@ -64,5 +62,31 @@ export class TitleScene extends Phaser.Scene {
     this.input.keyboard!.once('keydown-ENTER', start);
     this.input.keyboard!.once('keydown-SPACE', start);
     this.input.once('pointerdown', start);
+  }
+
+  /** Six-layer parallax village background (real art — see PreloadScene's
+   * credit comment), back-to-front: layer(N-1) is the sky/far treeline,
+   * layer0 the foreground cobbles. Source layers are 512x256; scaling
+   * uniformly by the taller of the two screen ratios covers the whole
+   * canvas with a single centred image per layer — no tiling needed for
+   * a static title screen. A slow drift on the back layers gives a hint
+   * of depth without needing true scrolling parallax. */
+  private buildParallaxBackground(): void {
+    const scale = Math.max(GAME_WIDTH / 512, GAME_HEIGHT / 256);
+    const w = 512 * scale;
+    const h = 256 * scale;
+    const cx = GAME_WIDTH / 2;
+    const cy = GAME_HEIGHT / 2 + 40;
+
+    for (let i = TITLE_BG_LAYER_COUNT - 1; i >= 0; i--) {
+      const img = this.add.image(cx, cy, TitleBgLayerKeys.layer(i));
+      img.setDisplaySize(w, h);
+      if (i >= 4) {
+        // sky/far layers: a very slow, subtle horizontal drift
+        this.tweens.add({
+          targets: img, x: cx + 12, duration: 9000 + i * 800, yoyo: true, repeat: -1, ease: 'Sine.InOut',
+        });
+      }
+    }
   }
 }

@@ -8,7 +8,7 @@ import { Player } from '@/entities/Player';
 import { NPC } from '@/entities/NPC';
 import { npcDefinitions } from '@/data/npcs';
 import { landmarks } from '@/data/landmarks';
-import { createAllAnimations } from '@/entities/AnimationFactory';
+import { createAllAnimations, SPARKLE_ANIM_KEY } from '@/entities/AnimationFactory';
 import { InteractionSystem } from '@/systems/InteractionSystem';
 import { saveManager } from '@/systems/SaveManager';
 import { EventBus, GameEvents } from '@/systems/EventBus';
@@ -65,7 +65,21 @@ export class WorldScene extends Phaser.Scene {
 
     EventBus.emit(GameEvents.PLAYER_TILE_MOVED, this.player.getTilePosition(TILE_SIZE));
 
+    EventBus.on(GameEvents.LANDMARK_DISCOVERED, this.playDiscoverySparkle, this);
+    this.events.once('shutdown', () => EventBus.off(GameEvents.LANDMARK_DISCOVERED, this.playDiscoverySparkle, this));
+
     void map; // tilemap kept alive via layer; reference retained for future expansion (e.g. debug overlays)
+  }
+
+  /** A short real-sprite sparkle burst over the player, marking a
+   * successful landmark discovery in the world itself (not just the UI
+   * panel) — the "location discovery animation" called for in the brief. */
+  private playDiscoverySparkle(): void {
+    const fx = this.add.sprite(this.player.x, this.player.y - 46, 'sparkle_0');
+    fx.setDepth(this.player.y + 1);
+    fx.setScale(1.4);
+    fx.play(SPARKLE_ANIM_KEY);
+    fx.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => fx.destroy());
   }
 
   update(_time: number, delta: number): void {

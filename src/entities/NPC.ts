@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { TILE_SIZE, DEPTH } from '@/config/GameConfig';
 import { npcAnimKey } from './AnimationFactory';
 import { NpcDefinition } from '@/data/npcs';
+import { CharacterSheetKeys, NPC_TINTS } from '@/assets/TextureKeys';
 
 const WAIT_MS = 1800;
 const NPC_SPEED = 45;
@@ -12,20 +13,22 @@ export class NPC extends Phaser.Physics.Arcade.Sprite {
   private waitTimer = 0;
   private shadow: Phaser.GameObjects.Ellipse;
   private dialogueIndex = 0;
+  private facing: 'down' | 'up' | 'left' | 'right' = 'down';
 
   constructor(scene: Phaser.Scene, def: NpcDefinition) {
     const start = def.patrol[0];
-    super(scene, start.x * TILE_SIZE, start.y * TILE_SIZE, npcAnimKey(def.paletteId, 'idle', 'down'));
+    super(scene, start.x * TILE_SIZE, start.y * TILE_SIZE, CharacterSheetKeys.sheet('down'), 0);
     this.definition = def;
     scene.add.existing(this);
     scene.physics.add.existing(this);
 
     this.setOrigin(0.5, 0.9);
     this.setDepth(this.y);
+    this.setTint(NPC_TINTS[def.paletteId]);
 
     const body = this.body as Phaser.Physics.Arcade.Body;
-    body.setSize(14, 10);
-    body.setOffset(5, 34);
+    body.setSize(16, 12);
+    body.setOffset(8, 34);
     body.setImmovable(true);
 
     this.shadow = scene.add.ellipse(this.x, this.y, 16, 6, 0x000000, 0.22);
@@ -61,7 +64,7 @@ export class NPC extends Phaser.Physics.Arcade.Sprite {
     if (dist < 3) {
       body.setVelocity(0, 0);
       this.waitTimer += delta;
-      this.playIdle(this.lastFacing());
+      this.playIdle();
       if (this.waitTimer > WAIT_MS) {
         this.waitTimer = 0;
         this.waypointIndex = (this.waypointIndex + 1) % patrol.length;
@@ -77,16 +80,8 @@ export class NPC extends Phaser.Physics.Arcade.Sprite {
     this.setDepth(this.y);
   }
 
-  private facing: 'down' | 'up' | 'left' | 'right' = 'down';
-
-  private lastFacing() {
-    return this.facing;
-  }
-
-  private playIdle(dir: 'down' | 'up' | 'left' | 'right'): void {
-    const dirKey = dir === 'left' || dir === 'right' ? 'side' : dir;
-    this.setFlipX(dir === 'left');
-    const key = npcAnimKey(this.definition.paletteId, 'idle', dirKey);
+  private playIdle(): void {
+    const key = npcAnimKey(this.definition.paletteId, 'idle', this.facing);
     if (this.anims.currentAnim?.key !== key) this.play(key, true);
   }
 
@@ -96,9 +91,7 @@ export class NPC extends Phaser.Physics.Arcade.Sprite {
     } else {
       this.facing = vy > 0 ? 'down' : 'up';
     }
-    const dirKey = this.facing === 'left' || this.facing === 'right' ? 'side' : this.facing;
-    this.setFlipX(this.facing === 'left');
-    const key = npcAnimKey(this.definition.paletteId, 'walk', dirKey);
+    const key = npcAnimKey(this.definition.paletteId, 'walk', this.facing);
     if (this.anims.currentAnim?.key !== key) this.play(key, true);
   }
 }

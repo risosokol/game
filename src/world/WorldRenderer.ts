@@ -56,12 +56,28 @@ const PROP_SIZE_HINT: Record<string, { originY: number }> = {
   monument: { originY: 0.97 },
 };
 
+/** Real tree sprites are small (16x16) top-down icons — scaled up to read
+ * clearly next to our 32px tiles and 48px-tall characters. */
+const TREE_DISPLAY_SIZE = 44;
+
 export function renderProps(scene: Phaser.Scene): void {
   for (const p of props) {
     const px = p.x * TILE_SIZE;
     const py = p.y * TILE_SIZE;
-    const key = PropTextureKeys[p.type];
     const hint = PROP_SIZE_HINT[p.type] ?? { originY: 0.9 };
+
+    if (p.type === 'tree') {
+      // Deterministic variant pick (real tree_a..tree_d sprites) so the
+      // same world position always renders the same tree across reloads.
+      const variantIndex = Math.abs(Math.round(px * 7 + py * 13)) % 4;
+      const img = scene.add.image(px, py, PropTextureKeys.treeVariant(variantIndex));
+      img.setDisplaySize(TREE_DISPLAY_SIZE, TREE_DISPLAY_SIZE);
+      img.setOrigin(0.5, hint.originY);
+      img.setDepth(py);
+      continue;
+    }
+
+    const key = PropTextureKeys[p.type];
     const img = scene.add.image(px, py, key);
     img.setOrigin(0.5, hint.originY);
     img.setDepth(py);

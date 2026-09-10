@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { TILE_SIZE } from '@/config/GameConfig';
 import { Palette } from './palette';
-import { PlayerTextureKeys, NpcTextureKeys, PropTextureKeys, UITextureKeys } from './TextureKeys';
+import { PropTextureKeys, UITextureKeys, REAL_GRASS_KEY } from './TextureKeys';
 import type { BuildingFootprint } from '@/world/cityLayout';
 import { TILE_ORDER, TILESET_KEY } from '@/world/tileIndex';
 import { TileType } from '@/world/TileGrid';
@@ -9,17 +9,19 @@ import { COLLIDER_TEXTURE_KEY } from '@/world/CollisionBuilder';
 import { textureKeyFor, effectiveFootprint } from './buildingTexture';
 
 /**
- * PLACEHOLDER-PROGRAMMATIC ART.
+ * PLACEHOLDER-PROGRAMMATIC ART for everything NOT covered by a real asset.
  *
- * Every texture used by the game is drawn at boot time with Phaser's
- * Graphics API and baked into a texture via generateTexture(). Nothing is
- * loaded from image files. This keeps the prototype runnable with zero
- * binary assets and zero external art pipeline, per the project's asset
- * strategy: "if custom pixel-art assets cannot be generated directly,
- * create clean temporary placeholder assets programmatically". Swapping
- * in hand-drawn art later only means loading real textures under these
- * same keys (see TextureKeys.ts) in PreloadScene instead of calling this
- * factory — nothing downstream needs to change.
+ * Most textures here are still drawn at boot time with Phaser's Graphics
+ * API and baked via generateTexture() — all ~2,460 real building
+ * footprints, non-grass ground tiles, street furniture props, and UI
+ * chrome. The player/NPC character, trees, the grass tile, the title
+ * background, and the discovery sparkle are real art loaded by
+ * PreloadScene instead (see its credit comment and README.md); this
+ * factory just stamps the loaded grass texture into the generated tileset
+ * strip (see stampRealGrassIntoTileset) and otherwise leaves those keys
+ * alone. Swapping more of this placeholder art for real sprites later
+ * just means loading them under the matching keys (see TextureKeys.ts) in
+ * PreloadScene instead of calling the relevant generate* method here.
  */
 export class PixelArtFactory {
   private scene: Phaser.Scene;
@@ -32,8 +34,6 @@ export class PixelArtFactory {
 
   generateAll(buildings: BuildingFootprint[]): void {
     this.generateTiles();
-    this.generatePlayer();
-    for (let i = 0; i < 3; i++) this.generateNpc(i);
     this.generateProps();
     this.generateAllBuildings(buildings);
     this.generateUI();
@@ -53,16 +53,46 @@ export class PixelArtFactory {
     const T = TILE_SIZE;
     const g = this.g;
 
+    const hasRealGrass = this.scene.textures.exists(REAL_GRASS_KEY);
     for (let i = 0; i < TILE_ORDER.length; i++) {
       const ox = i * T;
-      this.drawTile(g, TILE_ORDER[i], ox, T);
+      this.drawTile(g, TILE_ORDER[i], ox, T, hasRealGrass);
     }
-    this.tex(TILESET_KEY, T * TILE_ORDER.length, T);
+    const stripW = T * TILE_ORDER.length;
+    const baseKey = 'tileset_proc_base';
+    this.tex(baseKey, stripW, T);
+
+    // Composite into the final TILESET_KEY via a RenderTexture — this is
+    // the texture's only creation (not an overwrite of an existing key,
+    // which Phaser silently refuses), so it works whether or not we're
+    // stamping the real grass art on top.
+    const rt = this.scene.add.renderTexture(0, 0, stripW, T).setVisible(false);
+    rt.draw(baseKey, 0, 0);
+    if (hasRealGrass) this.stampRealGrassIntoTileset(rt, T);
+    rt.saveTexture(TILESET_KEY);
+    rt.destroy();
+    this.scene.textures.remove(baseKey);
   }
 
-  private drawTile(g: Phaser.GameObjects.Graphics, type: TileType, ox: number, T: number): void {
+  /** Overlays the real grass texture (loaded by PreloadScene) onto the
+   * GRASS/PARK slots of the tileset strip being composited, scaled up to
+   * tile size. Everything else in the strip stays procedurally drawn. */
+  private stampRealGrassIntoTileset(rt: Phaser.GameObjects.RenderTexture, T: number): void {
+    const grassIndex = TILE_ORDER.indexOf(TileType.GRASS);
+    const parkIndex = TILE_ORDER.indexOf(TileType.PARK);
+    const stamp = this.scene.add.image(0, 0, REAL_GRASS_KEY).setOrigin(0, 0).setDisplaySize(T, T);
+    rt.draw(stamp, grassIndex * T, 0);
+    if (parkIndex >= 0) {
+      stamp.setTint(0xcfe8b8); // slightly different shade so park still reads apart from street-side grass
+      rt.draw(stamp, parkIndex * T, 0);
+    }
+    stamp.destroy();
+  }
+
+  private drawTile(g: Phaser.GameObjects.Graphics, type: TileType, ox: number, T: number, skipGrass: boolean): void {
     switch (type) {
       case TileType.GRASS:
+        if (skipGrass) break;
         g.fillStyle(Palette.grassA).fillRect(ox, 0, T, T);
         g.fillStyle(Palette.grassB);
         for (let i = 0; i < 10; i++) g.fillRect(ox + ((i * 7) % T), (i * 13) % T, 2, 2);
@@ -110,80 +140,9 @@ export class PixelArtFactory {
   }
 
   // --------------------------------------------------------------- player
-  private drawHumanoid(g: Phaser.GameObjects.Graphics, dir: string, step: number, skin: number, shirt: number, hair: number): void {
-    const cx = 12;
-    const legOffset = step === 0 ? 0 : step === 1 ? -3 : 3;
-    // shadow
-    g.fillStyle(Palette.shadow, 0.25);
-    g.fillEllipse(cx, 44, 16, 6);
-
-    // legs
-    g.fillStyle(0x2c3e50);
-    g.fillRect(cx - 5 + (dir === 'side' ? legOffset : 0), 34, 4, 10 + (dir !== 'side' ? Math.abs(legOffset) : 0));
-    g.fillRect(cx + 1 - (dir === 'side' ? legOffset : 0), 34, 4, 10 + (dir !== 'side' ? -legOffset : 0));
-
-    // body
-    g.fillStyle(shirt);
-    g.fillRect(cx - 7, 20, 14, 16);
-    // arms
-    g.fillStyle(shirt);
-    g.fillRect(cx - 10, 21, 3, 12 + (step === 1 ? 2 : 0));
-    g.fillRect(cx + 7, 21, 3, 12 + (step === 2 ? 2 : 0));
-    g.fillStyle(skin);
-    g.fillRect(cx - 10, 30 + (step === 1 ? 2 : 0), 3, 3);
-    g.fillRect(cx + 7, 30 + (step === 2 ? 2 : 0), 3, 3);
-
-    // head
-    g.fillStyle(skin);
-    g.fillRect(cx - 6, 6, 12, 12);
-    // hair
-    g.fillStyle(hair);
-    g.fillRect(cx - 6, 4, 12, 5);
-    if (dir === 'down') {
-      g.fillStyle(0x1a1a1a);
-      g.fillRect(cx - 4, 10, 2, 2);
-      g.fillRect(cx + 2, 10, 2, 2);
-    } else if (dir === 'side') {
-      g.fillStyle(0x1a1a1a);
-      g.fillRect(cx + 3, 10, 2, 2);
-    }
-    // outline hint (feet contact)
-    g.fillStyle(0x1e2a33, 0.6);
-    g.fillRect(cx - 6, 43, 5, 2);
-    g.fillRect(cx + 1, 43, 5, 2);
-  }
-
-  private generatePlayer(): void {
-    const dirs: Array<{ key: string; flip?: boolean }> = [
-      { key: 'down' }, { key: 'up' }, { key: 'side' },
-    ];
-    const shirt = 0x3f7cae, skin = Palette.skin, hair = Palette.hairBrown;
-
-    for (const d of dirs) {
-      this.drawHumanoid(this.g, d.key, 0, skin, shirt, hair);
-      this.tex(PlayerTextureKeys.idle(d.key), 24, 48);
-      for (let f = 0; f < 2; f++) {
-        this.drawHumanoid(this.g, d.key, f === 0 ? 1 : 2, skin, shirt, hair);
-        this.tex(PlayerTextureKeys.walk(d.key, f), 24, 48);
-      }
-    }
-    // left is just a flipped "side" frame handled at render time via flipX,
-    // so we reuse the 'side' textures for both left/right (see Player.ts).
-  }
-
-  private generateNpc(paletteId: number): void {
-    const shirts = [0xb35a3a, 0x6a8f4a, 0x8a5aa8];
-    const hairs = [0x2b1c10, 0x6b4a2f, 0x1a1a1a];
-    const dirs = ['down', 'up', 'side'];
-    for (const d of dirs) {
-      this.drawHumanoid(this.g, d, 0, Palette.skin, shirts[paletteId], hairs[paletteId]);
-      this.tex(NpcTextureKeys.idle(paletteId, d), 24, 48);
-      for (let f = 0; f < 2; f++) {
-        this.drawHumanoid(this.g, d, f === 0 ? 1 : 2, Palette.skin, shirts[paletteId], hairs[paletteId]);
-        this.tex(NpcTextureKeys.walk(paletteId, d, f), 24, 48);
-      }
-    }
-  }
+  // Player/NPC art is a real loaded spritesheet (see PreloadScene +
+  // TextureKeys.CharacterSheetKeys) — no procedural humanoid generation
+  // needed any more.
 
   // ---------------------------------------------------------------- props
   private generateProps(): void {
@@ -515,18 +474,6 @@ export class PixelArtFactory {
     g.lineStyle(2, 0xf0e6c8, 0.6);
     g.strokeRoundedRect(1, 1, 62, 62, 8);
     this.tex(UITextureKeys.panel, 64, 64);
-
-    // title background: soft vertical gradient-ish sky + skyline hint
-    g.fillStyle(0x2b4a63);
-    g.fillRect(0, 0, 320, 180);
-    g.fillStyle(0x3c6a86);
-    g.fillRect(0, 90, 320, 90);
-    g.fillStyle(0x1f2d3a);
-    for (let i = 0; i < 8; i++) {
-      const bw = 22 + (i % 3) * 8;
-      g.fillRect(i * 40, 140 - (i % 4) * 10, bw, 60);
-    }
-    this.tex(UITextureKeys.titleBg, 320, 180);
   }
 
   private generateCollider(): void {
