@@ -1,11 +1,12 @@
 import Phaser from 'phaser';
 import { TILE_SIZE } from '@/config/GameConfig';
 import { Palette } from './palette';
-import { PlayerTextureKeys, NpcTextureKeys, PropTextureKeys, UITextureKeys, buildingTextureKey } from './TextureKeys';
+import { PlayerTextureKeys, NpcTextureKeys, PropTextureKeys, UITextureKeys } from './TextureKeys';
 import type { BuildingFootprint } from '@/world/cityLayout';
 import { TILE_ORDER, TILESET_KEY } from '@/world/tileIndex';
 import { TileType } from '@/world/TileGrid';
 import { COLLIDER_TEXTURE_KEY } from '@/world/CollisionBuilder';
+import { textureKeyFor, effectiveFootprint } from './buildingTexture';
 
 /**
  * PLACEHOLDER-PROGRAMMATIC ART.
@@ -34,7 +35,7 @@ export class PixelArtFactory {
     this.generatePlayer();
     for (let i = 0; i < 3; i++) this.generateNpc(i);
     this.generateProps();
-    for (const b of buildings) this.generateBuilding(b);
+    this.generateAllBuildings(buildings);
     this.generateUI();
     this.generateCollider();
     this.g.destroy();
@@ -276,6 +277,15 @@ export class PixelArtFactory {
     g.fillStyle(0xffffff).fillRect(16, 20, 10, 8);
     this.tex(PropTextureKeys.noticeboard, 32, 44);
 
+    // monument (stone column on a plinth — stands in for a memorial column)
+    g.fillStyle(Palette.shadow, 0.22).fillEllipse(10, 50, 20, 6);
+    g.fillStyle(Palette.stoneGray).fillRect(2, 42, 16, 8);
+    g.fillStyle(this.darken(Palette.stoneGray, 0.15)).fillRect(0, 46, 20, 4);
+    g.fillStyle(Palette.trim).fillRect(7, 6, 6, 36);
+    g.fillStyle(this.darken(Palette.trim, 0.1)).fillRect(6, 2, 8, 6);
+    g.fillStyle(0xd8c878).fillCircle(10, 4, 3);
+    this.tex(PropTextureKeys.monument, 20, 52);
+
     // small/medium generic shadows (used under buildings as extra polish)
     g.fillStyle(Palette.shadow, 0.22).fillEllipse(16, 8, 30, 12);
     this.tex(PropTextureKeys.shadowSmall, 32, 16);
@@ -284,15 +294,30 @@ export class PixelArtFactory {
   }
 
   // ------------------------------------------------------------ buildings
-  private generateBuilding(b: BuildingFootprint): void {
+  /** Curated landmarks each get a unique, exact-size texture; every other
+   * building (there are ~2,400 real ones in the playable area) reuses one
+   * texture per (kind, rounded size) bucket — see buildingTexture.ts. */
+  private generateAllBuildings(buildings: BuildingFootprint[]): void {
+    const generatedKeys = new Set<string>();
+    for (const b of buildings) {
+      const key = textureKeyFor(b);
+      if (generatedKeys.has(key)) continue;
+      generatedKeys.add(key);
+      const { w, h } = effectiveFootprint(b);
+      this.generateBuilding(key, b.kind, w, h, !!b.roofHorizontal);
+    }
+  }
+
+  private generateBuilding(key: string, kind: BuildingFootprint['kind'], wTiles: number, hTiles: number, roofHorizontal: boolean): void {
+    const spec = { kind, roofHorizontal };
     const T = TILE_SIZE;
-    const w = b.w * T;
-    const wallH = b.h * T;
-    const roofH = Math.round(Math.max(20, Math.min(64, b.h * T * 0.55)));
+    const w = wTiles * T;
+    const wallH = hTiles * T;
+    const roofH = Math.round(Math.max(20, Math.min(64, hTiles * T * 0.55)));
     const H = wallH + roofH;
     const g = this.g;
 
-    const scheme = this.schemeFor(b.kind);
+    const scheme = this.schemeFor(kind);
 
     // ground contact shadow
     g.fillStyle(Palette.shadow, 0.22);
@@ -332,15 +357,20 @@ export class PixelArtFactory {
     g.fillRect(w / 2 - doorW / 2, H - 26, doorW, 4);
 
     // roof
-    this.drawRoof(g, b, w, roofH, scheme);
+    this.drawRoof(g, spec, w, roofH, scheme);
 
     // kind-specific accents
-    this.drawAccent(g, b, w, roofH, wallH, scheme);
+    this.drawAccent(g, spec, w, roofH, wallH, scheme);
 
-    this.tex(buildingTextureKey(b.id), w, H);
+    this.tex(key, w, H);
   }
 
-  private drawRoof(g: Phaser.GameObjects.Graphics, b: BuildingFootprint, w: number, roofH: number, scheme: BuildingScheme): void {
+  private drawRoof(g: Phaser.GameObjects.Graphics, b: BuildingSpec, w: number, roofH: number, scheme: BuildingScheme): void {
+    if (b.kind === 'ruins') {
+      // no roof at all — the jagged broken wall tops (drawAccent) read as
+      // the silhouette instead.
+      return;
+    }
     if (b.kind === 'synagogue') {
       // domed hint: rounded roof
       g.fillStyle(scheme.roof);
@@ -366,13 +396,30 @@ export class PixelArtFactory {
     g.lineBetween(w * 0.5, 0, w * 0.5, roofH * 0.15);
   }
 
-  private drawAccent(g: Phaser.GameObjects.Graphics, b: BuildingFootprint, w: number, roofH: number, wallH: number, scheme: BuildingScheme): void {
+  private drawAccent(g: Phaser.GameObjects.Graphics, b: BuildingSpec, w: number, roofH: number, wallH: number, scheme: BuildingScheme): void {
     switch (b.kind) {
       case 'church':
       case 'chapel': {
         g.fillStyle(this.darken(scheme.roof, 0.1));
         g.fillRect(w / 2 - 3, -18, 6, 20);
         g.fillRect(w / 2 - 9, -12, 18, 5);
+        break;
+      }
+      case 'mausoleum': {
+        // small stone urn/finial on the ridge, plus a dark doorway arch
+        g.fillStyle(this.darken(scheme.roof, 0.2));
+        g.fillCircle(w / 2, roofH * 0.18, 6);
+        g.fillStyle(Palette.trim);
+        for (let x = 6; x < w - 6; x += 16) g.fillRect(x, roofH + wallH - 34, 4, 34);
+        break;
+      }
+      case 'ruins': {
+        // broken, uneven wall tops instead of a clean roofline
+        g.fillStyle(this.darken(scheme.wall, 0.3));
+        for (let x = 0; x < w; x += 10) {
+          const jag = 4 + ((x * 7) % 11);
+          g.fillRect(x, roofH - jag, 9, jag);
+        }
         break;
       }
       case 'manor': {
@@ -421,6 +468,8 @@ export class PixelArtFactory {
       case 'culturehouse': return { wall: Palette.wallStone, roof: Palette.roofSlateDark, window: Palette.windowGlass };
       case 'station': return { wall: Palette.wallCream, roof: Palette.roofRedDark, window: Palette.windowGlass };
       case 'shop': return { wall: Palette.wallCream, roof: Palette.roofRed, window: Palette.windowGlass };
+      case 'mausoleum': return { wall: Palette.wallStone, roof: Palette.roofSlateDark, window: Palette.windowGlass };
+      case 'ruins': return { wall: Palette.stoneGray, roof: Palette.stoneGray, window: Palette.windowGlass };
       case 'house':
       default: return { wall: Palette.wallCream, roof: Palette.roofRed, window: Palette.windowGlass };
     }
@@ -490,4 +539,9 @@ interface BuildingScheme {
   wall: number;
   roof: number;
   window: number;
+}
+
+interface BuildingSpec {
+  kind: BuildingFootprint['kind'];
+  roofHorizontal?: boolean;
 }

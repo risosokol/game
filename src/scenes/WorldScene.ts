@@ -14,6 +14,7 @@ import { saveManager } from '@/systems/SaveManager';
 import { EventBus, GameEvents } from '@/systems/EventBus';
 import { audioManager } from '@/systems/AudioManager';
 import { addDayLightingOverlay } from '@/world/DayLighting';
+import { landmarkAnchors } from '@/data/landmarkAnchors.generated';
 
 export class WorldScene extends Phaser.Scene {
   private player!: Player;
@@ -38,9 +39,11 @@ export class WorldScene extends Phaser.Scene {
     const worldHeight = GRID_HEIGHT * TILE_SIZE;
     this.physics.world.setBounds(0, 0, worldWidth, worldHeight);
 
+    // Default spawn: on Mariánske námestie, between the two churches.
+    const defaultSpawn = landmarkAnchors.parish_church;
     const savedPos = saveManager.getPlayerPosition();
-    const spawnX = (savedPos?.tileX ?? 70) * TILE_SIZE;
-    const spawnY = (savedPos?.tileY ?? 60) * TILE_SIZE;
+    const spawnX = (savedPos?.tileX ?? defaultSpawn.tileX - 4) * TILE_SIZE;
+    const spawnY = (savedPos?.tileY ?? defaultSpawn.tileY - 6) * TILE_SIZE;
     this.player = new Player(this, spawnX, spawnY);
     this.physics.add.collider(this.player, collisionGroup);
 

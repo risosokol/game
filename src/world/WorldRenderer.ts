@@ -2,9 +2,10 @@ import Phaser from 'phaser';
 import { TILE_SIZE, DEPTH } from '@/config/GameConfig';
 import { TileGrid } from './TileGrid';
 import { TILESET_KEY, tileTypeToIndex } from './tileIndex';
-import { buildings, props, BuildingFootprint } from './cityLayout';
-import { buildingTextureKey } from '@/assets/TextureKeys';
+import { buildings, BuildingFootprint } from './cityLayout';
+import { props } from './cityProps';
 import { PropTextureKeys } from '@/assets/TextureKeys';
+import { textureKeyFor, getFootprintRect } from '@/assets/buildingTexture';
 
 /** Turns a TileGrid + the hand-authored building/prop lists into actual
  * Phaser display objects. Ground tiles use a real Tilemap layer (so Phaser
@@ -30,9 +31,10 @@ export function renderTileLayer(scene: Phaser.Scene, grid: TileGrid): { map: Pha
 export function renderBuildings(scene: Phaser.Scene): Map<string, Phaser.GameObjects.Image> {
   const sprites = new Map<string, Phaser.GameObjects.Image>();
   for (const b of buildings) {
-    const bottomY = (b.y + b.h) * TILE_SIZE;
-    const centerX = (b.x + b.w / 2) * TILE_SIZE;
-    const img = scene.add.image(centerX, bottomY, buildingTextureKey(b.id));
+    const rect = getFootprintRect(b);
+    const bottomY = rect.y1 * TILE_SIZE;
+    const centerX = (rect.x0 + rect.w / 2) * TILE_SIZE;
+    const img = scene.add.image(centerX, bottomY, textureKeyFor(b));
     img.setOrigin(0.5, 1);
     img.setDepth(bottomY);
     sprites.set(b.id, img);
@@ -51,6 +53,7 @@ const PROP_SIZE_HINT: Record<string, { originY: number }> = {
   bike: { originY: 0.85 },
   car: { originY: 0.95 },
   noticeboard: { originY: 0.98 },
+  monument: { originY: 0.97 },
 };
 
 export function renderProps(scene: Phaser.Scene): void {
